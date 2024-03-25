@@ -58,3 +58,6 @@ Thumbs.db
 
 # Log files
 *.log
+
+# Other
+.idea
