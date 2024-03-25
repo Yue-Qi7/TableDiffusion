@@ -1,4 +1,13 @@
 """
+This file is under the following license and copyright.
+GPL-3.0 license
+Copyright (C) 2007 Free Software Foundation, Inc. <https://fsf.org/>
+
+The following modifications were made to the file:
+    - An error in the start index of the categorical features was fixed
+"""
+
+"""
 Code for the `TableDiffusion` model:
 The first differentially-private diffusion model for tabular datasets.
 
@@ -33,9 +42,11 @@ warnings.filterwarnings(
     message="Using a non-full backward hook when the forward contains multiple autograd Nodes",
 )
 
+
 # Function to compute the cosine noise schedule
 def get_beta(t, T):
     return (1 - np.cos((np.pi * t) / T)) / 2 + 0.1
+
 
 class MixedTypeGenerator(Generator):
     def __init__(
@@ -92,12 +103,15 @@ class TableDiffusion_Synthesiser:
         cuda=True,
     ):
         from datetime import datetime
+
         self._now = datetime.now().strftime("%m%d%H%M%S")
         # Setting up GPU (if available and specified)
         if cuda:
             assert torch.cuda.is_available()
         self.cuda = cuda
-        self.device = torch.device("cuda:0" if torch.cuda.is_available() and cuda else "cpu")
+        self.device = torch.device(
+            "cuda:0" if torch.cuda.is_available() and cuda else "cpu"
+        )
 
         # Hyperparameters
         self.batch_size = batch_size
@@ -128,7 +142,6 @@ class TableDiffusion_Synthesiser:
         self._eps = 0
 
     def fit(self, df, n_epochs=10, epsilon=100, discrete_columns=[], verbose=True):
-
         self._epsilon = epsilon
         self.data_dim = df.shape[1]
         self.data_n = df.shape[0]
@@ -147,10 +160,15 @@ class TableDiffusion_Synthesiser:
         df_encoded_cat = pd.DataFrame()  # categorical features
         for col in df.columns:
             if col in self.disc_columns:
-                self.encoders[col] = OneHotEncoder(sparse_output=False, handle_unknown="ignore")
-                transformed = self.encoders[col].fit_transform(df[col].values.reshape(-1, 1))
+                self.encoders[col] = OneHotEncoder(
+                    sparse_output=False, handle_unknown="ignore"
+                )
+                transformed = self.encoders[col].fit_transform(
+                    df[col].values.reshape(-1, 1)
+                )
                 transformed_df = pd.DataFrame(
-                    transformed, columns=[f"{col}_{i}" for i in range(transformed.shape[1])]
+                    transformed,
+                    columns=[f"{col}_{i}" for i in range(transformed.shape[1])],
                 )
                 df_encoded_cat = pd.concat([df_encoded_cat, transformed_df], axis=1)
                 # Log the number of categories for each discrete column
@@ -160,12 +178,17 @@ class TableDiffusion_Synthesiser:
                 df_encoded[col] = self.q_transformers[col].fit_transform(
                     df[col].values.reshape(-1, 1)
                 )
+
+        categorical_start_idx = df_encoded.shape[1]
         df_encoded = pd.concat([df_encoded, df_encoded_cat], axis=1)
 
-        categorical_start_idx = transformed_df.shape[1] + 1
         self.total_categories = sum(self.category_counts.values())
-        self.encoded_columns = df_encoded.columns  # store the column names of the encoded data
-        self.data_dim = df_encoded.shape[1]  # store the dimensionality of the encoded data
+        self.encoded_columns = (
+            df_encoded.columns
+        )  # store the column names of the encoded data
+        self.data_dim = df_encoded.shape[
+            1
+        ]  # store the dimensionality of the encoded data
         self.data_n = df_encoded.shape[0]  # store the total number of data points
 
         # Convert df to tensor and wrap in DataLoader
@@ -203,7 +226,11 @@ class TableDiffusion_Synthesiser:
         )
 
         self.privacy_engine = PrivacyEngine(accountant="rdp", secure_mode=False)
-        self.model, self.optim, train_data = self.privacy_engine.make_private_with_epsilon(
+        (
+            self.model,
+            self.optim,
+            train_data,
+        ) = self.privacy_engine.make_private_with_epsilon(
             module=self.model,
             optimizer=self.optim,
             data_loader=train_data,
@@ -216,7 +243,9 @@ class TableDiffusion_Synthesiser:
 
         # Log privacy engine and optimiser parameters
         if self.mlflow_logging:
-            _param_dict = gather_object_params(self.privacy_engine, prefix="privacy_engine.")
+            _param_dict = gather_object_params(
+                self.privacy_engine, prefix="privacy_engine."
+            )
             mlflow.log_params(_param_dict)
             _param_dict = gather_object_params(self.optim, prefix="optim.")
             mlflow.log_params(_param_dict)
@@ -236,8 +265,15 @@ class TableDiffusion_Synthesiser:
                 if i > 2 and loss.isnan():
                     print("Loss is NaN. Early stopping.")
                     return self
-                if self.sample_img_interval is not None and i % self.sample_img_interval == 0:
-                    fig, axs = plt.subplots(self.diffusion_steps, 5, figsize=(4*self.diffusion_steps, 4*5))
+                if (
+                    self.sample_img_interval is not None
+                    and i % self.sample_img_interval == 0
+                ):
+                    fig, axs = plt.subplots(
+                        self.diffusion_steps,
+                        5,
+                        figsize=(4 * self.diffusion_steps, 4 * 5),
+                    )
 
                 self._elapsed_batches += 1
 
@@ -249,12 +285,17 @@ class TableDiffusion_Synthesiser:
                 for t in range(self.diffusion_steps):
                     self._eps = self.privacy_engine.get_epsilon(self._delta)
                     if self._eps >= self.epsilon_target:
-                        print(f"Privacy budget reached in epoch {epoch} (batch {i}, {t=}).")
+                        print(
+                            f"Privacy budget reached in epoch {epoch} (batch {i}, {t=})."
+                        )
                         return self
                     beta_t = get_beta(t, self.diffusion_steps)
                     noise = torch.randn_like(real_X).to(self.device) * np.sqrt(beta_t)
                     noised_data = real_X + noise
-                    if self.sample_img_interval is not None and i % self.sample_img_interval == 0:
+                    if (
+                        self.sample_img_interval is not None
+                        and i % self.sample_img_interval == 0
+                    ):
                         print(f"Epoch {epoch} (batch {i}, {t=}), {np.sqrt(beta_t)=}")
 
                     if self.pred_noise:
@@ -297,16 +338,28 @@ class TableDiffusion_Synthesiser:
 
                         loss = numeric_loss + categorical_loss
 
-                    if self.sample_img_interval is not None and i % self.sample_img_interval == 0:
+                    if (
+                        self.sample_img_interval is not None
+                        and i % self.sample_img_interval == 0
+                    ):
                         with torch.no_grad():
                             ax = axs[t]
-                            ax[0].imshow(X.clone().detach().cpu().numpy()); ax[0].set_title("X")
-                            ax[1].imshow(noise.clone().detach().cpu().numpy()); ax[1].set_title(f"noise_{t}")
-                            ax[2].imshow(noised_data.clone().detach().cpu().numpy()); ax[2].set_title(f"noised_data_{t}")
+                            ax[0].imshow(X.clone().detach().cpu().numpy())
+                            ax[0].set_title("X")
+                            ax[1].imshow(noise.clone().detach().cpu().numpy())
+                            ax[1].set_title(f"noise_{t}")
+                            ax[2].imshow(noised_data.clone().detach().cpu().numpy())
+                            ax[2].set_title(f"noised_data_{t}")
                             if self.pred_noise:
-                                ax[3].imshow(predicted_noise.clone().detach().cpu().numpy()); ax[3].set_title(f"predicted_noise_{t}")
-                                denoised_data = noised_data - predicted_noise*np.sqrt(beta_t)
-                            ax[4].imshow(denoised_data.clone().detach().cpu().numpy()); ax[4].set_title(f"denoised_data_{t}")
+                                ax[3].imshow(
+                                    predicted_noise.clone().detach().cpu().numpy()
+                                )
+                                ax[3].set_title(f"predicted_noise_{t}")
+                                denoised_data = noised_data - predicted_noise * np.sqrt(
+                                    beta_t
+                                )
+                            ax[4].imshow(denoised_data.clone().detach().cpu().numpy())
+                            ax[4].set_title(f"denoised_data_{t}")
 
                     # Add losses from each diffusion step
                     agg_loss += loss
@@ -320,13 +373,20 @@ class TableDiffusion_Synthesiser:
                 loss.backward()
                 self.optim.step()
 
-
-                if self.sample_img_interval is not None and i % self.sample_img_interval == 0:
-                    plt.savefig(f"../results/diffusion_figs/{self._now}_forward_T{self.diffusion_steps}_B{self._elapsed_batches}.png")
+                if (
+                    self.sample_img_interval is not None
+                    and i % self.sample_img_interval == 0
+                ):
+                    plt.savefig(
+                        f"../results/diffusion_figs/{self._now}_forward_T{self.diffusion_steps}_B{self._elapsed_batches}.png"
+                    )
                     sample = self.sample(n=X.shape[0], post_process=False)
-                    plt.cla(); plt.clf()
+                    plt.cla()
+                    plt.clf()
                     plt.imshow(sample)
-                    plt.savefig(f"../results/diffusion_figs/{self._now}_sample_T{self.diffusion_steps}_B{self._elapsed_batches}.png")
+                    plt.savefig(
+                        f"../results/diffusion_figs/{self._now}_sample_T{self.diffusion_steps}_B{self._elapsed_batches}.png"
+                    )
 
                 if i % 20 == 0:
                     if verbose:
@@ -357,32 +417,40 @@ class TableDiffusion_Synthesiser:
         n = self.batch_size if n is None else n
         # Generate noise samples
         samples = torch.randn((n, self.data_dim)).to(self.device)
-        fig, axs = plt.subplots(self.diffusion_steps, 4, figsize=(4*self.diffusion_steps, 4*4))
+        fig, axs = plt.subplots(
+            self.diffusion_steps, 4, figsize=(4 * self.diffusion_steps, 4 * 4)
+        )
 
         # Generate synthetic data by runnin reverse diffusion process
         with torch.no_grad():
-            for t in range(self.diffusion_steps -1, -1, -1):
+            for t in range(self.diffusion_steps - 1, -1, -1):
                 beta_t = get_beta(t, self.diffusion_steps)
                 noise_scale = np.sqrt(beta_t)
                 print(f"Sampling {t=}, {np.sqrt(beta_t)=}")
                 ax = axs[self.diffusion_steps - t - 1]
-                ax[2].imshow(samples.clone().detach().cpu().numpy()); ax[2].set_title(f"samples_{t}")
+                ax[2].imshow(samples.clone().detach().cpu().numpy())
+                ax[2].set_title(f"samples_{t}")
 
                 if self.pred_noise:
                     # Repeatedly predict and subtract noise
                     pred_noise = self.model(samples)
                     predicted_noise = pred_noise * noise_scale
-                    ax[0].imshow(pred_noise.clone().detach().cpu().numpy()); ax[0].set_title(f"pred_noise_{t}")
-                    ax[1].imshow(predicted_noise.clone().detach().cpu().numpy()); ax[1].set_title(f"predicted_noise_{t}")
+                    ax[0].imshow(pred_noise.clone().detach().cpu().numpy())
+                    ax[0].set_title(f"pred_noise_{t}")
+                    ax[1].imshow(predicted_noise.clone().detach().cpu().numpy())
+                    ax[1].set_title(f"predicted_noise_{t}")
 
                     samples = samples - predicted_noise
                 else:
                     # Repeatedly denoise
                     samples = self.model(samples)
-                ax[3].imshow(samples.clone().detach().cpu().numpy()); ax[3].set_title(f"samples_{t-1}")
+                ax[3].imshow(samples.clone().detach().cpu().numpy())
+                ax[3].set_title(f"samples_{t-1}")
 
         if self.sample_img_interval is not None:
-            plt.savefig(f"../results/diffusion_figs/{self._now}_reverse_T{self.diffusion_steps}_B{self._elapsed_batches}.png")
+            plt.savefig(
+                f"../results/diffusion_figs/{self._now}_reverse_T{self.diffusion_steps}_B{self._elapsed_batches}.png"
+            )
 
         synthetic_data = samples.detach().cpu().numpy()
         self.model.train()
@@ -393,10 +461,14 @@ class TableDiffusion_Synthesiser:
         # Postprocessing: apply inverse transformations
         df_synthetic = pd.DataFrame(synthetic_data, columns=self.encoded_columns)
         for col in self.encoders:
-            transformed_cols = [c for c in df_synthetic.columns if c.startswith(f"{col}_")]
+            transformed_cols = [
+                c for c in df_synthetic.columns if c.startswith(f"{col}_")
+            ]
             if transformed_cols:
                 encoded_data = df_synthetic[transformed_cols].values
-                df_synthetic[col] = self.encoders[col].inverse_transform(encoded_data).ravel()
+                df_synthetic[col] = (
+                    self.encoders[col].inverse_transform(encoded_data).ravel()
+                )
                 df_synthetic = df_synthetic.drop(columns=transformed_cols)
 
         for col in self.q_transformers:
