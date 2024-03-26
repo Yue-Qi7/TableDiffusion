@@ -99,6 +99,7 @@ class TableDiffusion_Synthesiser:
         epsilon_target=1.0,
         epoch_target=5,
         delta=1e-5,
+        accountant="rdp",
         sample_img_interval=None,
         mlflow_logging=True,
         cuda=True,
@@ -129,6 +130,7 @@ class TableDiffusion_Synthesiser:
         # Setting privacy budget
         self.epsilon_target = epsilon_target
         self._delta = delta
+        self.accountant = accountant
 
         # Logging to MLflow
         self.mlflow_logging = mlflow_logging
@@ -228,7 +230,9 @@ class TableDiffusion_Synthesiser:
 
         # Check if to train with DP
         if self.epsilon_target != None:
-            self.privacy_engine = PrivacyEngine(accountant="rdp", secure_mode=False)
+            self.privacy_engine = PrivacyEngine(
+                accountant=self.accountant, secure_mode=False
+            )
             (
                 self.model,
                 self.optim,
