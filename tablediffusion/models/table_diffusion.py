@@ -6,6 +6,8 @@ Copyright (C) 2007 Free Software Foundation, Inc. <https://fsf.org/>
 The following modifications were made to the file:
     - An error in the start index of the categorical features was fixed.
     - Non-private baseline was implemented.
+    - The spent budget was corrected.
+    - The accountant parameter was added.
 """
 
 """
