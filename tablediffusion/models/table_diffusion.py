@@ -1,10 +1,11 @@
 """
 This file is under the following license and copyright.
-GPL-3.0 license
+GPL-3.0 License
 Copyright (C) 2007 Free Software Foundation, Inc. <https://fsf.org/>
 
 The following modifications were made to the file:
-    - An error in the start index of the categorical features was fixed
+    - An error in the start index of the categorical features was fixed.
+    - Non-private baseline was implemented.
 """
 
 """
@@ -225,30 +226,32 @@ class TableDiffusion_Synthesiser:
             betas=(self.b1, self.b2),
         )
 
-        self.privacy_engine = PrivacyEngine(accountant="rdp", secure_mode=False)
-        (
-            self.model,
-            self.optim,
-            train_data,
-        ) = self.privacy_engine.make_private_with_epsilon(
-            module=self.model,
-            optimizer=self.optim,
-            data_loader=train_data,
-            target_epsilon=self.epsilon_target,
-            target_delta=self._delta,
-            epochs=self.epoch_target,
-            max_grad_norm=self.max_grad_norm,
-            poisson_sampling=True,
-        )
-
-        # Log privacy engine and optimiser parameters
-        if self.mlflow_logging:
-            _param_dict = gather_object_params(
-                self.privacy_engine, prefix="privacy_engine."
+        # Check if to train with DP
+        if self.epsilon_target != None:
+            self.privacy_engine = PrivacyEngine(accountant="rdp", secure_mode=False)
+            (
+                self.model,
+                self.optim,
+                train_data,
+            ) = self.privacy_engine.make_private_with_epsilon(
+                module=self.model,
+                optimizer=self.optim,
+                data_loader=train_data,
+                target_epsilon=self.epsilon_target,
+                target_delta=self._delta,
+                epochs=self.epoch_target,
+                max_grad_norm=self.max_grad_norm,
+                poisson_sampling=True,
             )
-            mlflow.log_params(_param_dict)
-            _param_dict = gather_object_params(self.optim, prefix="optim.")
-            mlflow.log_params(_param_dict)
+
+            # Log privacy engine and optimiser parameters
+            if self.mlflow_logging:
+                _param_dict = gather_object_params(
+                    self.privacy_engine, prefix="privacy_engine."
+                )
+                mlflow.log_params(_param_dict)
+                _param_dict = gather_object_params(self.optim, prefix="optim.")
+                mlflow.log_params(_param_dict)
 
         # Define loss functions
         mse_loss = nn.MSELoss()
@@ -283,12 +286,13 @@ class TableDiffusion_Synthesiser:
 
                 # Diffusion process with cosine noise schedule
                 for t in range(self.diffusion_steps):
-                    self._eps = self.privacy_engine.get_epsilon(self._delta)
-                    if self._eps >= self.epsilon_target:
-                        print(
-                            f"Privacy budget reached in epoch {epoch} (batch {i}, {t=})."
-                        )
-                        return self
+                    if self.epsilon_target != None:
+                        self._eps = self.privacy_engine.get_epsilon(self._delta)
+                        if self._eps >= self.epsilon_target:
+                            print(
+                                f"Privacy budget reached in epoch {epoch} (batch {i}, {t=})."
+                            )
+                            return self
                     beta_t = get_beta(t, self.diffusion_steps)
                     noise = torch.randn_like(real_X).to(self.device) * np.sqrt(beta_t)
                     noised_data = real_X + noise
