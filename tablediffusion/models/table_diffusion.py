@@ -286,13 +286,11 @@ class TableDiffusion_Synthesiser:
 
                 # Diffusion process with cosine noise schedule
                 for t in range(self.diffusion_steps):
-                    if self.epsilon_target != None:
-                        self._eps = self.privacy_engine.get_epsilon(self._delta)
-                        if self._eps >= self.epsilon_target:
-                            print(
-                                f"Privacy budget reached in epoch {epoch} (batch {i}, {t=})."
-                            )
-                            return self
+                    if self.epsilon_target != None and self._eps >= self.epsilon_target:
+                        print(
+                            f"Privacy budget reached in epoch {epoch} (batch {i}, {t=})."
+                        )
+                        return self
                     beta_t = get_beta(t, self.diffusion_steps)
                     noise = torch.randn_like(real_X).to(self.device) * np.sqrt(beta_t)
                     noised_data = real_X + noise
@@ -376,6 +374,10 @@ class TableDiffusion_Synthesiser:
                 self.optim.zero_grad()
                 loss.backward()
                 self.optim.step()
+
+                # Return the spent epsilon so far
+                if self.epsilon_target != None:
+                    self._eps = self.privacy_engine.get_epsilon(self._delta)
 
                 if (
                     self.sample_img_interval is not None
